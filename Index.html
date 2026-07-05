@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Enterprise Proctored Examination</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js for Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- SweetAlert2 for Enterprise Modals -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <style>
+    /* Anti-Selection & UI Polish */
+    body { user-select: none; -webkit-user-select: none; -moz-user-select: none; }
+    .correct-ans { background-color: #10B981 !important; color: white !important; border-color: #047857 !important; transform: scale(1.02); transition: all 0.2s ease;}
+    .wrong-ans { background-color: #EF4444 !important; color: white !important; border-color: #B91C1C !important; transform: scale(0.98); transition: all 0.2s ease;}
+    .disabled { pointer-events: none; opacity: 0.6; filter: grayscale(20%); }
+    .pulse-red { animation: pulseRed 1s infinite; }
+    @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+  </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col justify-between">
+
+  <main class="container mx-auto px-4 py-8 max-w-4xl flex-grow flex items-center justify-center">
+    
+    <!-- 1. REGISTRATION -->
+    <div id="registration-card" class="bg-white p-8 rounded-2xl shadow-xl w-full border border-slate-200 transition-all">
+      <div class="text-center mb-8">
+        <h2 class="text-3xl font-extrabold text-slate-900">Proctored Certification</h2>
+        <p class="text-slate-500 mt-2">Secure execution environment. Ensure you are in a quiet location.</p>
+      </div>
+      
+      <form id="regForm" onsubmit="handleRegistration(event)">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div>
+            <label class="block text-sm font-bold text-slate-700 mb-2">Legal Full Name</label>
+            <input type="text" id="userName" required class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-0 outline-none transition" placeholder="John Doe">
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-slate-700 mb-2">Mobile Number</label>
+            <input type="tel" id="userPhone" required pattern="^[0-9]{10}$" maxlength="10" class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-0 outline-none transition" placeholder="10 Digits Only">
+          </div>
+        </div>
+
+        <div class="bg-amber-50 p-5 rounded-xl border border-amber-200 mb-8">
+          <h4 class="font-bold text-amber-900 flex items-center mb-2">
+            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+            Strict Anti-Cheat Protocols Active
+          </h4>
+          <ul class="text-sm text-amber-800 space-y-1 ml-7 list-disc">
+            <li>Exam requires <strong>Full-Screen Mode</strong>.</li>
+            <li>Navigating away from the tab/window will issue a warning.</li>
+            <li><strong>3 Warnings = Automatic Submission & Failure.</strong></li>
+            <li>Right-click, copy, and paste are disabled.</li>
+          </ul>
+        </div>
+        
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-xl transition shadow-lg text-lg">
+          Accept Terms & Initialize Exam
+        </button>
+      </form>
+    </div>
+
+    <!-- 2. EXAM ENGINE -->
+    <div id="quiz-card" class="hidden bg-white p-8 rounded-2xl shadow-xl w-full border border-slate-200">
+      
+      <!-- Exam Header -->
+      <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-1" id="category-badge">Category</span>
+          <h3 class="text-lg font-bold text-slate-800" id="question-progress">Q 1 of 100</h3>
+        </div>
+        
+        <div class="flex items-center space-x-4">
+          <div class="text-right">
+            <span class="text-xs font-bold text-slate-400 block">WARNINGS</span>
+            <span class="text-lg font-black text-amber-600" id="warning-counter">0 / 3</span>
+          </div>
+          <div id="timer-box" class="flex items-center bg-slate-100 text-slate-700 px-4 py-2 rounded-xl border border-slate-200 font-mono font-bold text-xl transition-all">
+            ⏱ <span id="timer" class="ml-2">01:00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="w-full bg-slate-100 rounded-full h-1.5 mb-8">
+        <div id="progress-bar-fill" class="bg-blue-600 h-1.5 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+      </div>
+
+      <h2 id="question-text" class="text-2xl font-bold text-slate-900 mb-8 leading-tight">Loading...</h2>
+
+      <div id="options-container" class="space-y-4 mb-8">
+        <!-- JS Injection -->
+      </div>
+
+      <div class="flex justify-end border-t border-slate-100 pt-6">
+        <button id="next-btn" onclick="goToNextQuestion()" disabled class="bg-slate-900 hover:bg-black text-white font-bold py-3 px-8 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed shadow-md">
+          Proceed to Next &rarr;
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. ADVANCED ANALYTICS RESULT -->
+    <div id="result-card" class="hidden bg-white p-8 rounded-2xl shadow-xl w-full border border-slate-200">
+      <div class="text-center mb-8">
+        <h2 class="text-3xl font-black text-slate-900">Performance Analytics</h2>
+        <p class="text-slate-500 mt-1" id="result-user-info"></p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+        
+        <!-- Chart Column -->
+        <div class="md:col-span-1 flex flex-col items-center justify-center p-4 bg-slate-50 rounded-2xl">
+          <div class="relative w-48 h-48">
+            <canvas id="scoreChart"></canvas>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span class="text-3xl font-black text-slate-800" id="res-score-center">0</span>
+              <span class="text-[10px] uppercase font-bold text-slate-400">Total Score</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metrics Column -->
+        <div class="md:col-span-2 grid grid-cols-2 gap-4">
+          <div class="p-5 bg-green-50 rounded-xl border border-green-100">
+            <p class="text-3xl font-black text-green-600" id="res-correct">0</p>
+            <p class="text-sm font-bold text-green-800 mt-1">Correct Answers (+4)</p>
+          </div>
+          <div class="p-5 bg-red-50 rounded-xl border border-red-100">
+            <p class="text-3xl font-black text-red-600" id="res-wrong">0</p>
+            <p class="text-sm font-bold text-red-800 mt-1">Wrong Answers (-1)</p>
+          </div>
+          <div class="p-5 bg-slate-100 rounded-xl border border-slate-200">
+            <p class="text-3xl font-black text-slate-600" id="res-empty">0</p>
+            <p class="text-sm font-bold text-slate-800 mt-1">Unanswered (0)</p>
+          </div>
+          <div class="p-5 bg-blue-50 rounded-xl border border-blue-100">
+            <p class="text-3xl font-black text-blue-600" id="res-time">0s</p>
+            <p class="text-sm font-bold text-blue-800 mt-1">Avg. Time / Question</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-center mb-8">
+        <button onclick="window.print()" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold py-2 px-6 rounded-lg transition flex items-center">
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+          Print / Save PDF Certificate
+        </button>
+      </div>
+
+      <h4 class="text-xl font-bold text-slate-800 mb-4 border-b pb-2">Detailed Question Audit</h4>
+      <div id="audit-log-container" class="space-y-4 max-h-96 overflow-y-auto pr-2 rounded-xl">
+        <!-- Injection -->
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // --- ADVANCED QUESTION POOL (With Categories) ---
+    const MASTER_QUESTIONS = [
+      { q: "1 Genersl rules can be framed by", options: ["Government of India", "Authorised Officer", "General Manager", "COM"], answer: "Government of India" },
+
+      { q: "2 Approved pecial instructions are issued or approved by", options: ["COM", "Authorised Officer", "CRS", "Railway Board"], answer: "Authorised Officer" },
+
+      { q: "3 The authorized officer of South Central Railway is", options: ["COM", "GM", "CTM", "CSO"], answer: "GM" },
+
+      { q: "4 Subsidiary rules are framed by", options: ["СТМ", "CSO", "Authorised Officer", "Railway Board"], answer: "Authorised Officer" },
+
+      { q: "5 A fixed stop signal of a station controlling the entry of trains into next block section is", options: ["FSS", "LSS", "Outer", "Home"], answer: "FSS" },
+
+      { q: "6 which is dangerous to trains.", options: ["shunting", "connection", "communication", "Obstruction"], answer: "Obstruction" },
+
+      { q: "7 Special instructions are issued by", options: ["СТМ", "CSO", "Authorised Officer", "Railway Board"], answer: "Authorised Officer" },
+
+      { q: "8 At a Block station the Station Limits are between", options: ["two outermost signals", "two outer signals", "two FSS", "Two LSS"], answer: "two outermost signals" },
+
+      { q: "9 On Double line class 'B' station Multiple Aspect Signalling, station section lies between", options: ["outermost facing points to LSS", "BSLB to LSS", "Either 'A' or 'B'", "none of above"], answer: "Either 'A' or 'B'" },
+
+      { q: "10 On single line 'B' class MAS station, Station section lies between", options: ["two Advance Starter", "two SLB", "two outer most points", "any one of the above"], answer: "two outer most points" },
+
+      { q: "11 The system adopted for the time being for the working of trains on any portion of a railway is known as", options: ["system of controlling", "direction of traffic", "System of working", "none of these"], answer: "System of working" },
+
+      { q: "12 The classification of a station shall be mentioned in the", options: ["SWR", "WTT", "Both A & B", "none of these"], answer: "SWR" },
+
+      { q: "13 Before taking independent charge, whenever LPs / ALPs / SMS / Guards / Switchmen join this Zonal Railway, on transfer, they shall attend", options: ["G & SR Initial course", "G &SR Refresher course", "Technical initial course", "none of these"], answer: "G & SR Initial course" },
+
+      { q: "14 No Railway Servant directly connected with the working of trains shall take or use any alcoholic drink, sedative, narcotic or stimulant drug or preparation before the commencement of his duty within", options: ["6 hours", "8 hours", "10 hours", "12 hours"], answer: "8 hours" },
+
+      { q: "15 Signals used for controlling movement of trains as per G&SR are", options: ["fixed signals", "hand signals", "detonators", "all the above"], answer: "all the above" },
+
+      { q: "16 The marker board that is provided to identify Distant Signal in colour light area is", options: ["IB", "P", "G", "A"], answer: "P" },
+
+      { q: "17 The normal aspect of Distant signal is", options: ["caution", "attention", "stop", "proceed"], answer: "caution" },
+
+      { q: "18 Whenever two yellow lights are exhibited in Distant signal the Aspect is", options: ["caution", "attention", "stop", "proceed"], answer: "attention" },
+
+      { q: "19 Whenever one yellow light is exhibited in Distant signal the Aspect is", options: ["caution", "attention", "proceed slow", "proceed"], answer: "caution" },
+
+      { q: "20 The indication of the Distant signal in Caution Aspect is", options: ["stop dead", "proceed and be prepared to stop at the next stop signal", "proceed and be prepared to pass the next stop signal at a restrictive speed", "proceed"], answer: "proceed and be prepared to stop at the next stop signal" },
+
+      { q: "21 The indication of the Distant signal in Attention Aspect is", options: ["stop dead", "proceed and be prepared to stop at the next stop signal", "proceed and be prepared to pass the next stop signal at a restrictive speed", "proceed"], answer: "proceed and be prepared to pass the next stop signal at a restrictive speed" },
+
+      { q: "22 The signal which tells about the aspect of stop signal ahead is", options: ["outer", "Distant", "advance starter", "none of these"], answer: "Distant" },
+
+      { q: "23 Whenever Inner Distant is provided, the aspects Distant Signal is capable of displaying", options: ["attention, proceed", "caution, attention", "stop, proceed", "stop, caution"], answer: "caution, attention" },
+
+      { q: "24 When colour light Distant signal is combined with Gate/LSS, normal aspect of that signal is", options: ["stop", "caution", "attention", "proceed"], answer: "stop" },
+
+      { q: "25 In rear of the stop signal, Distant signal is provided at a distance of", options: ["1200M", "1500M", "1000M", "400M"], answer: "1000M" },
+
+      { q: "26 Wherever two Distant signals are provided the board that is eliminated is", options: ["BSLB", "signal warning board", "SLB", "caution indicator"], answer: "signal warning board" },
+
+      { q: "27 Calling On signal may be provided below any stop signal except", options: ["FSS", "LSS", "Starter", "Home"], answer: "FSS" },
+
+      { q: "28 Calling ON signal in 'ON' position will show", options: ["miniature yellow light", "single yellow light", "miniature white light", "no light"], answer: "no light" },
+
+      { q: "29 The light that is displayed when colour light Calling On signal is taken 'OFF'", options: ["miniature yellow", "miniature red", "green", "yellow"], answer: "miniature yellow" },
+
+      { q: "30 The indication of the Calling On signal when taken 'OFF' is", options: ["proceed and be prepared to stop at next stop signal", "stop and then draw ahead with caution and be prepared to stop short or any obstruction", "stop dead", "proceed cautiously"], answer: "stop and then draw ahead with caution and be prepared to stop short or any obstruction" },
+
+      { q: "31 The occasions when Calling ON signal can be used are", options: ["receiving a train on obstructed line", "when signal above is defective", "both A & B", "none of the above"], answer: "both A & B" },
+
+      { q: "32 To take 'OFF' calling ON signal, the train must come to a stop on", options: ["Axle counter", "free zone", "calling on zone", "distant signal"], answer: "calling on zone" },
+
+      { q: "33 The time required to assume 'OFF' position when calling ON signal is taken 'OFF'", options: ["60 secs", "90 secs", "120 secs", "240 secs"], answer: "120 secs" },
+
+      { q: "34 Shunt signal may be provided below any stop signal except", options: ["LSS", "FSS", "Starter", "none of above"], answer: "FSS" },
+
+      { q: "35 Shunt signal below stop signal, in 'ON' position will show", options: ["red light", "two white lights horizontally", "no light", "yellow light"], answer: "no light" },
+
+      { q: "36 The Aspect of independent shunt signal at 'ON' is", options: ["stop", "caution", "attention", "no light"], answer: "stop" },
+
+      { q: "37 The colour lights exhibited in Position light shunt signal in 'OFF' position is", options: ["two white lights horizontally", "two white lights diagonally", "two green lights", "yellow lights"], answer: "two white lights horizontally" },
+
+      { q: "38 Shunt signal detects", options: ["Home signal", "LSS", "points over the route", "no points"], answer: "points over the route" },
+
+      { q: "39 The type of shunt signal that shall be provided in colour light area is", options: ["miniature semaphore", "disc type", "position type", "none of above"], answer: "position type" },
+
+      { q: "40 The authority to pass defective Independent shunt signal or shunt signal below stop signal at 'ON' is", options: ["T.369(1)", "T.806", "PLCT", "T.369(3b)+PHS"], answer: "T.369(3b)+PHS" },
+
+      { q: "41 The authority for the LP When Shunting Permitted Indictor is defective, is", options: ["T.369(1)", "T.806", "PLCT", "T.369(3b)+PHS"], answer: "T.369(3b)+PHS" },
+
+      { q: "42 IB signal is identified by this marker board", options: ["IB", "P", "G", "A"], answer: "IB" },
+
+      { q: "43 When a fixed signal is not in use, it shall be distinguished by", options: ["two crossed bars", "two parallel bars", "two horizontal bars", "one vertical bar"], answer: "two crossed bars" },
+
+      { q: "44 Route indicators are treated as", options: ["permissive signals", "stop signals", "subsidiary signals", "Duplicate signals"], answer: "stop signals" },
+
+      { q: "45 When a signal is newly erected or shifted, caution order shall be given for a period of", options: ["15 days", "10 days", "12 days", "16 days"], answer: "10 days" },
+
+      { q: "46 When a signal is newly erected or shifted, in addition to issuing of caution order, it shall be notified in", options: ["SOB", "Station Diary", "TSR", "Sign 'ON' register"], answer: "SOB" },
+
+      { q: "47 Signal sighting committee will go on footplate inspection once in", options: ["one month", "two months", "three months", "four months"], answer: "three months" },
+
+      { q: "48 The marker board by which Gate signal is identified by", options: ["IB", "P", "G", "A"], answer: "G" },
+
+      { q: "49 The marker board for indicating the Outlying siding points are", options: ["A", "IB", "S", "G"], answer: "S" },
+
+      { q: "50 The speed of a goods train while entering terminal yard is restricted to", options: ["8kmph", "10kmph", "15kmph", "20kmph"], answer: "15kmph" },
+
+      { q: "51 Signal which is taken 'OFF' for a train will be put to 'ON' position in emergency only to", options: ["obey SCOR instructions", "obey advance SM instructions", "issue tickets", "avert an accident"], answer: "avert an accident" },
+
+      { q: "52 To put back starter/advanced starter for departing train LP of the train should be advised by a", options: ["written memo", "C.O", "T.369 (3b)", "none of above"], answer: "written memo" },
+
+      { q: "53 The aspect in the normal position of fixed signals except Automatic Signals is", options: ["stop", "caution", "proceed", "most restrictive aspect"], answer: "most restrictive aspect" },
+
+      { q: "54 Even though departure signals are taken off, LP shall stop at stations where stoppages are scheduled in the", options: ["VG", "CTR", "WTT", "SOB"], answer: "WTT" },
+
+      { q: "55 The signals that are prohibited to be used for shunting purposes is/are", options: ["outer", "home", "LSS", "All the above"], answer: "LSS" },
+
+      { q: "56 Slip siding is intended to protect", options: ["Outlying siding", "Block section", "station section", "station limits"], answer: "Block section" },
+
+      { q: "57 Catch siding is intended to protect", options: ["Outlying siding", "Block section", "station section/station", "station limits"], answer: "station section/station" },
+
+      { q: "58 By waving green flag by day and a white light by night up and down vertically as high and as low as possible indicate", options: ["move slowly", "move towards person signalling", "train parting", "coupling"], answer: "move slowly" },
+
+      { q: "59 Violently waving a white light horizontally across the body of a person indicates", options: ["train parting", "move away from the person showing", "proceed", "stop dead"], answer: "stop dead" },
+
+      { q: "60 A green flag/green light moved slowly up and down indicates", options: ["stop dead", "proceed", "train parting", "move towards person signalling"], answer: "proceed" },
+
+      { q: "61 Dotonators are also known as", options: ["fog signals", "flare signals", "illuminating signal", "none of these"], answer: "fog signals" },
+
+      { q: "62 Normal life of a detonator is", options: ["3 years", "5 years", "7 years", "10 years"], answer: "5 years" },
+
+      { q: "63 The signals to be used to warn the incoming train of an obstruction at night shall be a", options: ["flashing amber light", "red flag", "red flashing H/S lamp", "none of these"], answer: "red flashing H/S lamp" },
+
+      { q: "64 the signals to be used to warn the incoming train of an obstruction during day shall be a", options: ["flashing amber light", "red flag", "red light of H/S lamp", "red flashing H/S lamp"], answer: "red flag" },
+
+      { q: "65 A blank signal under complete power off situation is to be treated as", options: ["defective signal", "signal at off", "no signal", "none of above"], answer: "defective signal" },
+
+      { q: "66 When home is defective and pre warning is given, the LP may pass such signal on receipt of", options: ["PHS at the foot of the defective signal", "PHS at the first facing points", "T.369(3b)+PHS", "PN through SPT"], answer: "T.369(3b)+PHS" },
+
+      { q: "67 Advance authority to pass defective Reception signal at the next station is", options: ["T.369(3b)", "T.369(1)", "T/C.1425", "T.409"], answer: "T.369(1)" },
+
+      { q: "68 Authority to pass defective starter signal (if it is not LSS) is", options: ["T.369(3b) +PHS", "Either 'A' or 'B'", "PLCT"], answer: "T.369(3b) +PHS" },
+
+      { q: "69 On Double line when LSS is defective Authority to proceed is", options: ["T.369 (3b)", "PLCT", "T.806+PN", "T/C.602"], answer: "PLCT" },
+
+      { q: "70 On Single line token less section, when LSS is defective Authority to proceed is", options: ["T.369(3b)", "T/B.602", "T.806+PN", "PLCT"], answer: "T/B.602" },
+
+      { q: "71 The authority required by Loco Pilot when passes starter at 'ON' partly and stopped before Advanced Starter, apart from ATP", options: ["memo countersigned by Guard", "T.369 (3b)+PHS", "Advanced starter off or PLCT", "all the above"], answer: "T.369 (3b)+PHS" },
+
+      { q: "72 During day when Gate signal is at ON, the LP shall wait for", options: ["one minute", "two minute", "three minute", "four minute"], answer: "one minute" },
+
+      { q: "73 When Gate signal is at ON, the LP shall wait one/two minutes by day/night and gateman not available, LP may pass the gate after ensuring it is closed on the hand signals of", options: ["Gangman", "train crew", "patrolman", "PWI"], answer: "Gangman" },
+
+      { q: "74 During night when Gate signal is at ON, the LP shall wait for", options: ["one minute", "two minute", "three minute", "four minute"], answer: "two minute" },
+
+      { q: "75 When Gate signal is at ON, the LP shall wait one/two minutes by day/night and gateman exhibiting hand signals. LP may", options: ["stop at the gate", "proceed at MPS", "proceed cautiously", "none of above"], answer: "proceed cautiously" },
+
+      { q: "76 When LP passed the Gate signal at ON and gateman is not available, the LP of the first train shall report the matter to the", options: ["SM of station where train stops", "need not report", "SM or rear station", "SM of next station"], answer: "SM of next station" },
+
+      { q: "77 If a signal is showing white light in place of a colour light, it is treated as signal is showing", options: ["most restrictive aspect", "caution aspect", "attention aspect", "stop aspect"], answer: "most restrictive aspect" },
+
+      { q: "78 The signal shall be treated as defective, whenever colour light signal is flickering / bobbing and does not assume a steady aspect at least for", options: ["20 sec", "30 sec", "60 sec", "120 sec"], answer: "30 sec" },
+
+      { q: "79 The authority given to the loco pilot at station when I B S is defective", options: ["PLCT", "T.369 (3b)", "Both A & B"], answer: "Both A & B" },
+
+      { q: "80 When I B S is at 'ON' immediately the Loco Pilot shall stop and contact", options: ["SM of advance station", "SCOR", "SM in rear station", "TPC"], answer: "SCOR" },
+
+      { q: "81 When IBS is at 'ON' and the telephone is out of order, Loco Pilot shall wait for", options: ["two minutes", "three minutes", "four minutes", "five minutes"], answer: "five minutes" },
+
+      { q: "82 When IBS is at 'ON' and the telephone is out of order, Loco Pilot after waiting for five minutes shall proceed when view is clear/not clear upto next stop signal at a speed of", options: ["10/8kmph", "25/10kmph", "20/10kmph", "15/8kmph"], answer: "15/8kmph" },
+
+      { q: "83 Over the trailed through points, under no circumstances should a train be", options: ["move forward", "backed", "run with MPS", "none of these"], answer: "backed" },
+
+      { q: "84 The Loco Pilot shall whistle intermittently when his engine explodes detonator and take every possible caution as necessary including", options: ["increase of speed", "stop the train", "proceed with MPS", "reduction of speed"], answer: "reduction of speed" },
+
+      { q: "85 After exploding the detonator, if no obstruction found further, the Loco Pilot, can pick up normal speed after proceeding cautiously up to a distance of", options: ["500 meters", "one KM", "1.5 KM", "2 KM"], answer: "one KM" },
+
+      { q: "86 When Loco Pilot notices a signal warning of an obstruction, except detonator, he shall", options: ["proceed cautiously", "proceed upto next station and report", "stop after noticing the obstruction", "stop immediately"], answer: "stop immediately" },
+
+      { q: "87 When the Loco Pilot notices a signal warning of an obstruction and no further details are noticed, shall stop during day/night for", options: ["one/two minute", "two/three minutes", "3/4 minutes", "none of these"], answer: "one/two minute" },
+
+      { q: "88 When the Loco Pilot notices a signal warning of an obstruction and no further details are noticed, after stopping one/ two by day/night, he shall proceed upto the next block station", options: ["cautiously", "with MPS", "at 20kmph", "at 30 kmph"], answer: "cautiously" },
+
+      { q: "89 In rear of FSS, the Signal warning board is located at a distance of", options: ["180 meters", "400 meters", "1000 meters", "1400 meters"], answer: "1400 meters" },
+
+      { q: "90 The LP shall clearly understand that if no signal indication is available from the Warning board he should control the speed as if the stop signal ahead is", options: ["in OFF position", "may be taken OFF", "at ON", "none of above"], answer: "at ON" },
+
+      { q: "91 The road learning trips that are given to the Loco Pilot who has not operated on a section for 3 to 6 months, is", options: ["one trip", "two trips", "three trips", "additional trip approved by DME"], answer: "three trips" },
+
+      { q: "92 The Loco Pilot and guard will be given three no. of L R trips before they are booked for regular working including one trip between", options: ["sunset to sunrise", "06.00hrs to 20.00hrs", "21.00hrs to 07.00hrs", "20.00hrs to 06.00hrs"], answer: "sunset to sunrise" },
+
+      { q: "93 To record observations of Loco Pilot during his run must be maintained in all lobbies", options: ["TSR", "rough journal book", "S&T, track failure and loco failure register", "CTR"], answer: "rough journal book" },
+
+      { q: "94 Guard shall set his watch by the station clock or the clock at the authorized place of reporting for duty and communicate the time to the LP and make entry in the", options: ["memo book", "CTR", "Rough journal book", "defective register"], answer: "Rough journal book" },
+
+      { q: "95 ODC shall be allowed to be attached by a train for transport only with the prior sanction of", options: ["CRS", "RAILWAY BOARD", "TXR", "COM"], answer: "COM" },
+
+      { q: "96 Even under normal circumstances subject to observance of permanent / temporary speed restrictions in Passenger carrying trains should run at", options: ["booked speed", "maximum permissible speed", "110kmph", "100kmph"], answer: "maximum permissible speed" },
+
+      { q: "97 Loco Pilot shall not make up between any two stations more time than is allowed in", options: ["PTT", "RTT", "Sheet time table", "WTT"], answer: "WTT" },
+
+      { q: "98 During dense fog maximum speed of a train on Absolute block system shall be restricted to", options: ["25kmph", "50kmph", "60kmph", "30kmph"], answer: "60kmph" },
+
+      { q: "99 Normally the speed of trains over Non-Interlocked points, turnouts and crossover shall not exceed", options: ["8 kmph", "10 KMPH", "15 KMPH", "30 KMPH"], answer: "15 KMPH" },
+
+      { q: "100 The speed of a passenger/goods train on 1 in 8 1/2 turnout, thick web switch with symmetrical layout with 52/60 km rails on PSC sleepers is restricted to", options: ["8 kmph", "10 KMPH", "15 KMPH", "30 KMPH"], answer: "15 KMPH" },
+
+      { q: "101 Isolation is necessary where the trains are permitted to run through a station at a speed exceeding", options: ["50 kmph", "110 KMPH", "75 KMPH", "15 KMPH"], answer: "50 kmph" },
+
+      { q: "102 Engine pushing is not permitted with out the prior permission of", options: ["SM of advance station", "SM of rear station", "SM of the notice station", "none of above"], answer: "none of above" }
+      // Scale up to 100 questions cleanly here
+    ];
+
+    // State Management
+    let state = {
+      questions: [],
+      currentIdx: 0,
+      userAnswers: [],
+      warnings: 0,
+      isStarted: false,
+      isFinished: false,
+      profile: { name: "", phone: "" },
+      currentQStartTime: 0
+    };
+
+    const WARNING_LIMIT = 3;
+    const TIME_LIMIT = 60;
+    let timerInterval = null;
+    let timeLeft = TIME_LIMIT;
+
+    // --- ANTI-CHEAT & PROCTORING EVENTS ---
+    
+    // 1. Disable Right Click & Copy/Paste
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('copy', e => { e.preventDefault(); triggerCheatWarning('Copying text is strictly prohibited.'); });
+    document.addEventListener('paste', e => e.preventDefault());
+
+    // 2. Tab Switch / Window Blur Tracking
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && state.isStarted && !state.isFinished) {
+        triggerCheatWarning("Navigating away from the exam tab is not allowed.");
+      }
+    });
+
+    // 3. Full Screen Exit Tracking
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && state.isStarted && !state.isFinished) {
+        triggerCheatWarning("You exited Full-Screen mode. Return immediately.");
+      }
+    });
+
+    function triggerCheatWarning(reason) {
+      state.warnings++;
+      document.getElementById('warning-counter').innerText = `${state.warnings} / ${WARNING_LIMIT}`;
+      saveSession(); // Auto-save penalty
+
+      if (state.warnings >= WARNING_LIMIT) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Exam Terminated',
+          text: 'Maximum security violations reached. Your exam is being automatically submitted.',
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          timer: 4000
+        }).then(() => processFinalMetrics(true));
+      } else {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Security Violation',
+          text: `${reason} Warning ${state.warnings} of ${WARNING_LIMIT}.`,
+          confirmButtonColor: '#ef4444'
+        });
+      }
+    }
+
+    // --- CORE LOGIC ---
+
+    // Fisher-Yates Shuffle
+    const shuffle = arr => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    };
+
+    function handleRegistration(e) {
+      e.preventDefault();
+      
+      const name = document.getElementById('userName').value.trim();
+      const phone = document.getElementById('userPhone').value.trim();
+      
+      // Request Full Screen
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.warn(`Fullscreen blocked: ${err.message}`);
+        });
+      }
+
+      // Check for active session recovery
+      const saved = localStorage.getItem('examSession');
+      if (saved) {
+        Swal.fire({
+          title: 'Session Recovered',
+          text: 'We found an unfinished exam session. Resuming...',
+          icon: 'info',
+          confirmButtonColor: '#3b82f6'
+        });
+        state = JSON.parse(saved);
+      } else {
+        state.profile = { name, phone };
+        state.questions = shuffle([...MASTER_QUESTIONS]);
+        state.isStarted = true;
+      }
+
+      document.getElementById('registration-card').classList.add('hidden');
+      document.getElementById('quiz-card').classList.remove('hidden');
+      document.getElementById('warning-counter').innerText = `${state.warnings} / ${WARNING_LIMIT}`;
+      
+      loadQuestion();
+    }
+
+    function saveSession() {
+      if(!state.isFinished) {
+        localStorage.setItem('examSession', JSON.stringify(state));
+      }
+    }
+
+    function loadQuestion() {
+      clearInterval(timerInterval);
+      timeLeft = TIME_LIMIT;
+      state.currentQStartTime = Date.now();
+      
+      const uiTimer = document.getElementById('timer');
+      const uiTimerBox = document.getElementById('timer-box');
+      uiTimer.innerText = "01:00";
+      uiTimerBox.className = "flex items-center bg-slate-100 text-slate-700 px-4 py-2 rounded-xl border border-slate-200 font-mono font-bold text-xl transition-all";
+      
+      const currentQ = state.questions[state.currentIdx];
+      
+      // UI Updates
+      document.getElementById('question-progress').innerText = `Question ${state.currentIdx + 1} of ${state.questions.length}`;
+      document.getElementById('category-badge').innerText = currentQ.category;
+      document.getElementById('progress-bar-fill').style.width = `${(state.currentIdx / state.questions.length) * 100}%`;
+      document.getElementById('question-text').innerText = currentQ.q;
+      
+      const optionsContainer = document.getElementById('options-container');
+      optionsContainer.innerHTML = "";
+      document.getElementById('next-btn').disabled = true;
+
+      // Shuffle Options
+      let choices = shuffle([...currentQ.options]);
+      choices.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = "w-full text-left px-6 py-4 border-2 border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 font-semibold text-lg text-slate-700 transition-all duration-200 cursor-pointer option-btn bg-white shadow-sm";
+        btn.innerText = opt;
+        btn.onclick = () => handleSelection(btn, opt);
+        optionsContainer.appendChild(btn);
+      });
+
+      saveSession();
+      timerInterval = setInterval(tickTimer, 1000);
+    }
+
+    function tickTimer() {
+      timeLeft--;
+      const secs = timeLeft < 10 ? "0" + timeLeft : timeLeft;
+      document.getElementById('timer').innerText = `00:${secs}`;
+      
+      if (timeLeft <= 10) {
+        document.getElementById('timer-box').classList.add('bg-red-500', 'text-white', 'pulse-red', 'border-red-600');
+        document.getElementById('timer-box').classList.remove('bg-slate-100', 'text-slate-700');
+      }
+
+      if (timeLeft <= 0) {
+        clearInterval(timerInterval);
+        processAnswer("NOT_ANSWERED", null);
+      }
+    }
+
+    function handleSelection(btn, selectedText) {
+      clearInterval(timerInterval);
+      processAnswer(selectedText, btn);
+    }
+
+    function processAnswer(selectedText, clickedBtn) {
+      const currentQ = state.questions[state.currentIdx];
+      const timeSpent = Math.min(Math.round((Date.now() - state.currentQStartTime) / 1000), TIME_LIMIT);
+      
+      let status = "EMPTY";
+      if (selectedText !== "NOT_ANSWERED") {
+        status = (selectedText === currentQ.answer) ? "CORRECT" : "WRONG";
+      }
+
+      // UI Visual Feedback
+      const allBtns = document.querySelectorAll('.option-btn');
+      allBtns.forEach(b => {
+        b.classList.add('disabled');
+        if (b.innerText === currentQ.answer) {
+          b.classList.add('correct-ans');
+        }
+      });
+
+      if (status === "WRONG" && clickedBtn) {
+        clickedBtn.classList.add('wrong-ans');
+      }
+
+      // Save Data
+      state.userAnswers.push({
+        question: currentQ.q,
+        category: currentQ.category,
+        selected: selectedText,
+        correctAnswer: currentQ.answer,
+        status: status,
+        timeSpent: timeSpent
+      });
+
+      document.getElementById('next-btn').disabled = false;
+      saveSession();
+    }
+
+    function goToNextQuestion() {
+      state.currentIdx++;
+      if (state.currentIdx < state.questions.length) {
+        loadQuestion();
+      } else {
+        processFinalMetrics(false);
+      }
+    }
+
+    function processFinalMetrics(forcedSubmit = false) {
+      clearInterval(timerInterval);
+      state.isFinished = true;
+      localStorage.removeItem('examSession'); // Clear recovery logic
+      
+      // Exit Fullscreen gracefully
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(()=>{});
+      }
+
+      let score = 0, correct = 0, wrong = 0, empty = 0, totalTime = 0;
+      let categories = {};
+
+      state.userAnswers.forEach(ans => {
+        totalTime += ans.timeSpent;
+        
+        if(!categories[ans.category]) categories[ans.category] = { correct: 0, total: 0 };
+        categories[ans.category].total++;
+
+        if (ans.status === "CORRECT") { score += 4; correct++; categories[ans.category].correct++; }
+        else if (ans.status === "WRONG") { score -= 1; wrong++; }
+        else { empty++; }
+      });
+
+      const avgTime = (state.userAnswers.length > 0) ? Math.round(totalTime / state.userAnswers.length) : 0;
+
+      // Render UI
+      document.getElementById('quiz-card').classList.add('hidden');
+      document.getElementById('result-card').classList.remove('hidden');
+
+      document.getElementById('res-score-center').innerText = score;
+      document.getElementById('res-correct').innerText = correct;
+      document.getElementById('res-wrong').innerText = wrong;
+      document.getElementById('res-empty').innerText = empty;
+      document.getElementById('res-time').innerText = `${avgTime}s`;
+      document.getElementById('result-user-info').innerText = `${state.profile.name} | ${state.profile.phone} ${forcedSubmit ? '| ⚠️ FORCED SUBMIT' : ''}`;
+
+      // Render Chart.js
+      const ctx = document.getElementById('scoreChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Correct (+4)', 'Wrong (-1)', 'Unanswered (0)'],
+          datasets: [{
+            data: [correct, wrong, empty],
+            backgroundColor: ['#10B981', '#EF4444', '#94A3B8'],
+            borderWidth: 0,
+            hoverOffset: 4
+          }]
+        },
+        options: { cutout: '75%', plugins: { legend: { display: false } } }
+      });
+
+      // Render Audit Log
+      const auditDiv = document.getElementById('audit-log-container');
+      state.userAnswers.forEach((ans, i) => {
+        let style = ans.status === "CORRECT" ? "bg-green-50 border-green-200 text-green-900" :
+                    ans.status === "WRONG" ? "bg-red-50 border-red-200 text-red-900" :
+                    "bg-slate-50 border-slate-200 text-slate-700";
+        
+        auditDiv.innerHTML += `
+          <div class="p-4 rounded-xl border ${style} shadow-sm">
+            <div class="flex justify-between items-start mb-2">
+              <span class="font-bold">Q${i+1}. ${ans.question}</span>
+              <span class="text-xs font-mono bg-white px-2 py-1 rounded shadow-sm opacity-80">${ans.timeSpent}s</span>
+            </div>
+            <div class="grid grid-cols-2 gap-4 text-sm mt-3">
+              <div>Your Answer: <span class="font-bold block truncate">${ans.selected === "NOT_ANSWERED" ? "Skipped" : ans.selected}</span></div>
+              <div>Correct Answer: <span class="font-bold text-green-700 block truncate">${ans.correctAnswer}</span></div>
+            </div>
+          </div>
+        `;
+      });
+
+      // Post to Google Sheet Backend
+      google.script.run.saveQuizResult({
+        name: state.profile.name, phone: state.profile.phone,
+        score, correct, wrong, unanswered: empty,
+        warnings: state.warnings, forcedSubmit, avgTime,
+        categoryScores: categories, detailedLog: state.userAnswers
+      });
+    }
+  </script>
+</body>
+</html>
